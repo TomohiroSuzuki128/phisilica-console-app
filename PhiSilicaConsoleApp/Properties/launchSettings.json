@@ -1,0 +1,9 @@
+{
+    "PhiConsoleApp": {
+      "commandName": "Project",
+      "environmentVariables": {
+        "DOTNET_ENVIRONMENT": "debug"
+      }
+    }
+  }
+}
