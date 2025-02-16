@@ -77,14 +77,12 @@ var translatedSystemPrompt = string.Empty;
 if (isTranslate)
 {
     Console.WriteLine("Translated System Prompt:");
-    AsyncOperationProgressHandler<LanguageModelResponse, string>
-        ProgressHandler = (asyncInfo, translatedPart) =>
-        {
-            Console.Write(translatedPart);
-            translatedSystemPrompt += translatedPart;
-        };
     var asyncTranslateOp = await Translate(systemPrompt, Language.Japanese, Language.English, languageModelOptions, contentFilterOptions);
-    asyncTranslateOp.Progress = ProgressHandler;
+    asyncTranslateOp.Progress = (asyncInfo, translatedPart) =>
+    {
+        Console.Write(translatedPart);
+        translatedSystemPrompt += translatedPart;
+    };
     await　asyncTranslateOp;
     Console.WriteLine($"{newLine}----------------------------------------{newLine}");
 }
@@ -98,14 +96,12 @@ var translatedUserPrompt = string.Empty;
 if (isTranslate)
 {
     Console.WriteLine("Translated User Prompt:");
-    AsyncOperationProgressHandler<LanguageModelResponse, string>
-    ProgressHandler = (asyncInfo, translatedPart) =>
+    var asyncTranslateOp = await Translate(userPrompt, Language.Japanese, Language.English, languageModelOptions, contentFilterOptions);
+    asyncTranslateOp.Progress = (asyncInfo, translatedPart) =>
     {
         Console.Write(translatedPart);
         translatedUserPrompt += translatedPart;
     };
-    var asyncTranslateOp = await Translate(userPrompt, Language.Japanese, Language.English, languageModelOptions, contentFilterOptions);
-    asyncTranslateOp.Progress = ProgressHandler;
     await asyncTranslateOp;
     Console.WriteLine($"{newLine}----------------------------------------{newLine}");
 }
