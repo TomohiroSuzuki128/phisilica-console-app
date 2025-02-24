@@ -5,7 +5,6 @@ using Microsoft.Windows.AI.Generative;
 using Windows.Foundation;
 using Build5Nines.SharpVector;
 using Build5Nines.SharpVector.Data;
-using System.Text;
 
 var newLine = Environment.NewLine;
 
@@ -122,8 +121,11 @@ else
     translatedUserPrompt = userPrompt;
 }
 
-Console.WriteLine($"{newLine}システムプロンプト：{newLine}{translatedSystemPrompt}");
-Console.WriteLine($"{newLine}ユーザープロンプト：{newLine}{translatedUserPrompt}{newLine}");
+if (isTranslate)
+{
+    Console.WriteLine($"{newLine}システムプロンプト：{newLine}{translatedSystemPrompt}");
+    Console.WriteLine($"{newLine}ユーザープロンプト：{newLine}{translatedUserPrompt}{newLine}");
+}
 
 Console.WriteLine("Prompt :");
 Console.WriteLine(translatedUserPrompt);
