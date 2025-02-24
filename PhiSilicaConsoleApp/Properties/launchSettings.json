@@ -1,5 +1,6 @@
 {
-    "PhiConsoleApp": {
+  "profiles": {
+    "PhiSilicaConsoleApp": {
       "commandName": "Project",
       "environmentVariables": {
         "DOTNET_ENVIRONMENT": "debug"
