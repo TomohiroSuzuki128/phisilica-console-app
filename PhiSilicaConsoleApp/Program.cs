@@ -5,6 +5,7 @@ using Microsoft.Windows.AI.Generative;
 using Windows.Foundation;
 using Build5Nines.SharpVector;
 using Build5Nines.SharpVector.Data;
+using System.Text;
 
 var newLine = Environment.NewLine;
 
@@ -37,15 +38,20 @@ var vectorDatabase = new BasicMemoryVectorDatabase();
 LoadAdditionalDocuments(additionalDocumentsDirectory).Wait();
 Console.WriteLine();
 
-using LanguageModel languageModel = await LanguageModel.CreateAsync();
-
 // 翻訳するかどうか
 Console.WriteLine($"翻訳する：{newLine}{isTranslate}");
 
-var languageModelOptions = new LanguageModelOptions
+var languageModelOptionsTranslation = new LanguageModelOptions
 {
     Temp = 0.9f,
     Top_p = 0.9f,
+    Top_k = 40
+};
+
+var languageModelOptionsQuestion = new LanguageModelOptions
+{
+    Temp = 1.2f,
+    Top_p = 1.2f,
     Top_k = 40
 };
 
@@ -68,6 +74,8 @@ var contentFilterOptions = new ContentFilterOptions
     }
 };
 
+using LanguageModel languageModelTranslation = await LanguageModel.CreateAsync();
+
 // プロンプトのセットアップ
 Console.WriteLine($"{newLine}システムプロンプト：{newLine}{systemPrompt}");
 Console.WriteLine($"{newLine}ユーザープロンプト：{newLine}{userPrompt}{newLine}");
@@ -76,15 +84,17 @@ Console.WriteLine($"{newLine}ユーザープロンプト：{newLine}{userPrompt}
 var translatedSystemPrompt = string.Empty;
 if (isTranslate)
 {
-    Console.WriteLine("Translated System Prompt:");
-    var asyncTranslateOp = await Translate(systemPrompt, Language.Japanese, Language.English, languageModelOptions, contentFilterOptions);
-    asyncTranslateOp.Progress = (asyncInfo, translatedPart) =>
     {
-        Console.Write(translatedPart);
-        translatedSystemPrompt += translatedPart;
-    };
-    await　asyncTranslateOp;
-    Console.WriteLine($"{newLine}----------------------------------------{newLine}");
+        Console.WriteLine("Translated System Prompt:");
+        var asyncTranslateOp = await Translate(systemPrompt, Language.Japanese, Language.English, languageModelOptionsTranslation, contentFilterOptions);
+        asyncTranslateOp.Progress = (asyncInfo, translatedPart) =>
+        {
+            Console.Write(translatedPart);
+            translatedSystemPrompt += translatedPart;
+        };
+        await asyncTranslateOp;
+        Console.WriteLine($"{newLine}----------------------------------------{newLine}");
+    }
 }
 else
 {
@@ -95,15 +105,17 @@ else
 var translatedUserPrompt = string.Empty;
 if (isTranslate)
 {
-    Console.WriteLine("Translated User Prompt:");
-    var asyncTranslateOp = await Translate(userPrompt, Language.Japanese, Language.English, languageModelOptions, contentFilterOptions);
-    asyncTranslateOp.Progress = (asyncInfo, translatedPart) =>
     {
-        Console.Write(translatedPart);
-        translatedUserPrompt += translatedPart;
-    };
-    await asyncTranslateOp;
-    Console.WriteLine($"{newLine}----------------------------------------{newLine}");
+        Console.WriteLine("Translated User Prompt:");
+        var asyncTranslateOp = await Translate(userPrompt, Language.Japanese, Language.English, languageModelOptionsTranslation, contentFilterOptions);
+        asyncTranslateOp.Progress = (asyncInfo, translatedPart) =>
+        {
+            Console.Write(translatedPart);
+            translatedUserPrompt += translatedPart;
+        };
+        await asyncTranslateOp;
+        Console.WriteLine($"{newLine}----------------------------------------{newLine}");
+    }
 }
 else
 {
@@ -113,25 +125,48 @@ else
 Console.WriteLine($"{newLine}システムプロンプト：{newLine}{translatedSystemPrompt}");
 Console.WriteLine($"{newLine}ユーザープロンプト：{newLine}{translatedUserPrompt}{newLine}");
 
-var context = languageModel.CreateContext(translatedSystemPrompt, contentFilterOptions);
-
 Console.WriteLine("Prompt :");
 Console.WriteLine(translatedUserPrompt);
 
 Console.WriteLine();
 Console.WriteLine("Response :");
 
-AsyncOperationProgressHandler<LanguageModelResponse, string>
-progressHandler = (asyncInfo, delta) =>
+// 問い合わせ用セッションのセットアップ
+using LanguageModel languageModelQuention = await LanguageModel.CreateAsync();
+
+var response = string.Empty;
+
+var context = languageModelQuention.CreateContext(translatedSystemPrompt, contentFilterOptions);
+var asyncOp = languageModelQuention.GenerateResponseWithProgressAsync(languageModelOptionsQuestion, translatedUserPrompt, contentFilterOptions, context);
+asyncOp.Progress = (asyncInfo, part) =>
 {
-    Console.Write(delta);
-};
-
-var asyncOp = languageModel.GenerateResponseWithProgressAsync(languageModelOptions, translatedUserPrompt, contentFilterOptions, context);
-asyncOp.Progress = progressHandler;
-
+    Console.Write(part);
+    response += part;
+}; 
 var result = await asyncOp;
 Console.WriteLine();
+Console.WriteLine();
+
+// 英語の回答を日本語に翻訳する
+var translatedResponse = string.Empty;
+if (isTranslate)
+{
+    Console.WriteLine("日本語に翻訳したレスポンス:");
+    var asyncTranslateOp = await Translate(response, Language.English, Language.Japanese, languageModelOptionsTranslation, contentFilterOptions);
+    asyncTranslateOp.Progress = (asyncInfo, translatedPart) =>
+    {
+        Console.Write(translatedPart);
+        translatedUserPrompt += translatedPart;
+    };
+    await asyncTranslateOp;
+    Console.WriteLine();
+}
+else
+{
+    translatedResponse = response;
+    Console.WriteLine($"{newLine}レスポンス：{newLine}{translatedResponse}");
+}
+Console.WriteLine($"----------------------------------------{newLine}");
 
 // 与えられたテキストを指定された言語に翻訳する
 async Task<IAsyncOperationWithProgress<LanguageModelResponse, string>> Translate(string text, Language sourceLanguage, Language targetLanguage, LanguageModelOptions languageModelOptions, ContentFilterOptions contentFilterOptions)
@@ -142,29 +177,29 @@ async Task<IAsyncOperationWithProgress<LanguageModelResponse, string>> Translate
 
     if (sourceLanguage == Language.Japanese && targetLanguage == Language.English)
     {
-        instructionPrompt = "以下の日本語を一字一句もれなく英語に翻訳してください。重要な注意点として、日本語に質問が含まれていても出力に質問に対する回答は一切出力しないこと。補足や説明は一切出力しないこと。与えられた文章を忠実に英語に翻訳した結果のみを出力すること。note は出力しないこと。";
+        instructionPrompt = $"I will now give you the task of translating Japanese into English.{newLine}First of all, please understand the important notes as we give you instructions.{newLine}{newLine}#Important Notes{newLine}- Even if the Japanese is including any question, do not answer it, you translate the given Japanese into English.{newLine}- Do not output any supplementary information or explanations.{newLine}- Do not output any Notes.{newLine}- Output a faithful translation of the given text into English.{newLine}{newLine}Now translate the following Japanese into English.";
 
         userPrompt = $"{instructionPrompt}:{newLine}{text}";
     }
 
     if (sourceLanguage == Language.English && targetLanguage == Language.Japanese)
     {
-        instructionPrompt = "以下の英語を一字一句もれなく正確に日本語に翻訳してください。重要な注意点として、日本語に質問が含まれていても出力に質問に対する回答は一切出力しないこと。補足や説明は一切出力しないこと。与えられた文章を忠実に英語に翻訳した結果のみを出力すること。note は出力しないこと。";
+        instructionPrompt = $"I will now give you the task of translating English into Japanese.{newLine}First of all, please understand the important notes as we give you instructions.{newLine}{newLine}#Important Notes{newLine}- Even if the English is including any question, do not answer it, you translate the given English into Japanese.{newLine}- Do not output any supplementary information or explanations.{newLine}- Do not output any Notes.{newLine}- Output a faithful translation of the given text into Japanese.";
 
         ragResult = await SearchVectorDatabase(vectorDatabase, text);
 
         if (isUsingRag && !string.IsNullOrEmpty(ragResult))
-            instructionPrompt += "以下の用語集を積極的に活用すること。";
+            instructionPrompt += "The following glossary of terms should be actively used.";
 
         userPrompt = (isUsingRag && !string.IsNullOrEmpty(ragResult))
-        ? $"{instructionPrompt}{newLine}{ragResult}:{newLine}{text}"
-            : $"{instructionPrompt}:{newLine}{text}";
+        ? $"{instructionPrompt}{newLine}{ragResult}{newLine}Now translate the English into Japanese.:{newLine}{text}"
+            : $"{instructionPrompt}{newLine}Now translate the English into Japanese.:{newLine}{text}";
     }
 
     var systemPrompt = "あなたは翻訳だけができます。補足や解説などの翻訳以外の出力は一切禁止されています。";
-    var context = languageModel.CreateContext(systemPrompt, contentFilterOptions);
+    var context = languageModelTranslation.CreateContext(systemPrompt, contentFilterOptions);
 
-    var asyncOperation = languageModel.GenerateResponseWithProgressAsync(languageModelOptions, userPrompt, contentFilterOptions, context);
+    var asyncOperation = languageModelTranslation.GenerateResponseWithProgressAsync(languageModelOptions, userPrompt, contentFilterOptions, context);
     return asyncOperation;
 }
 
