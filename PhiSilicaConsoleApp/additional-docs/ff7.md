@@ -28,3 +28,4 @@
  - bustling 賑やかな
  - eco-terrorist エコテロリスト
  - antagonist 敵対者
+ - dual-natured man 二重人格者
