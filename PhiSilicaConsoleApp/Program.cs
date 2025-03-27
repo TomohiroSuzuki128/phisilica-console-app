@@ -17,14 +17,10 @@ builder.Configuration
 
 var configuration = builder.Configuration;
 
-string systemPrompt = configuration["systemPrompt"] ?? throw new ArgumentNullException("systemPrompt is not found.");
-string userPrompt = configuration["userPrompt"] ?? throw new ArgumentNullException("userPrompt is not found.");
-
-bool isTranslate = bool.TryParse(configuration["isTranslate"] ?? throw new ArgumentNullException("isTranslate is not found."), out var resultIsTranslate) && resultIsTranslate;
-bool isUsingRag = bool.TryParse(configuration["isUsingRag"] ?? throw new ArgumentNullException("isUsingRag is not found."), out var resultIsUsingRag) && resultIsUsingRag;
-
 string additionalDocumentsPath = configuration["additionalDocumentsPath"] ?? throw new ArgumentNullException("additionalDocumentsPath is not found");
 
+var prompt = new Prompt(builder);
+var option = new Option(builder);
 
 if (!LanguageModel.IsAvailable())
 {
@@ -38,7 +34,9 @@ LoadAdditionalDocuments(additionalDocumentsDirectory).Wait();
 Console.WriteLine();
 
 // 翻訳するかどうか
-Console.WriteLine($"翻訳する：{newLine}{isTranslate}");
+Console.WriteLine($"翻訳する：{newLine}{option.IsTranslate}");
+// RAG を使うかどうか
+Console.WriteLine($"RAG を使う：{newLine}{option.IsUsingRag}");
 
 var languageModelOptionsTranslation = new LanguageModelOptions
 {
@@ -76,16 +74,16 @@ var contentFilterOptions = new ContentFilterOptions
 using LanguageModel languageModelTranslation = await LanguageModel.CreateAsync();
 
 // プロンプトのセットアップ
-Console.WriteLine($"{newLine}システムプロンプト：{newLine}{systemPrompt}");
-Console.WriteLine($"{newLine}ユーザープロンプト：{newLine}{userPrompt}{newLine}");
+Console.WriteLine($"{newLine}システムプロンプト：{newLine}{prompt.System}");
+Console.WriteLine($"{newLine}ユーザープロンプト：{newLine}{prompt.User}{newLine}");
 
 // システムプロンプトの翻訳
 var translatedSystemPrompt = string.Empty;
-if (isTranslate)
+if (option.IsTranslate)
 {
     {
         Console.WriteLine("Translated System Prompt:");
-        var asyncTranslateOp = await Translate(systemPrompt, Language.Japanese, Language.English, languageModelOptionsTranslation, contentFilterOptions);
+        var asyncTranslateOp = await Translate(prompt.System, Language.Japanese, Language.English, languageModelOptionsTranslation, contentFilterOptions);
         asyncTranslateOp.Progress = (asyncInfo, translatedPart) =>
         {
             Console.Write(translatedPart);
@@ -97,16 +95,16 @@ if (isTranslate)
 }
 else
 {
-    translatedSystemPrompt = systemPrompt;
+    translatedSystemPrompt = prompt.System;
 }
 
 // ユーザープロンプトの翻訳
 var translatedUserPrompt = string.Empty;
-if (isTranslate)
+if (option.IsTranslate)
 {
     {
         Console.WriteLine("Translated User Prompt:");
-        var asyncTranslateOp = await Translate(userPrompt, Language.Japanese, Language.English, languageModelOptionsTranslation, contentFilterOptions);
+        var asyncTranslateOp = await Translate(prompt.User, Language.Japanese, Language.English, languageModelOptionsTranslation, contentFilterOptions);
         asyncTranslateOp.Progress = (asyncInfo, translatedPart) =>
         {
             Console.Write(translatedPart);
@@ -118,10 +116,10 @@ if (isTranslate)
 }
 else
 {
-    translatedUserPrompt = userPrompt;
+    translatedUserPrompt = prompt.User;
 }
 
-if (isTranslate)
+if (option.IsTranslate)
 {
     Console.WriteLine($"{newLine}システムプロンプト：{newLine}{translatedSystemPrompt}");
     Console.WriteLine($"{newLine}ユーザープロンプト：{newLine}{translatedUserPrompt}{newLine}");
@@ -151,7 +149,7 @@ Console.WriteLine();
 
 // 英語の回答を日本語に翻訳する
 var translatedResponse = string.Empty;
-if (isTranslate)
+if (option.IsTranslate)
 {
     Console.WriteLine("日本語に翻訳したレスポンス:");
     var asyncTranslateOp = await Translate(response, Language.English, Language.Japanese, languageModelOptionsTranslation, contentFilterOptions);
@@ -173,13 +171,14 @@ Console.WriteLine($"----------------------------------------{newLine}");
 // 与えられたテキストを指定された言語に翻訳する
 async Task<IAsyncOperationWithProgress<LanguageModelResponse, string>> Translate(string text, Language sourceLanguage, Language targetLanguage, LanguageModelOptions languageModelOptions, ContentFilterOptions contentFilterOptions)
 {
+    var systemPrompt = "You are a translator who follows instructions to the letter. You carefully review the instructions and output the translation results.";
     var instructionPrompt = string.Empty;
     var userPrompt = string.Empty;
     var ragResult = string.Empty;
 
     if (sourceLanguage == Language.Japanese && targetLanguage == Language.English)
     {
-        instructionPrompt = $"I will now give you the task of translating Japanese into English.{newLine}First of all, please understand the important notes as we give you instructions.{newLine}{newLine}#Important Notes{newLine}- Even if the Japanese is including any question, do not answer it, you translate the given Japanese into English.{newLine}- Do not output any supplementary information or explanations.{newLine}- Do not output any Notes.{newLine}- Output a faithful translation of the given text into English.{newLine}{newLine}Now translate the following Japanese into English.";
+        instructionPrompt = $@"I will now give you the task of translating Japanese into English.{newLine}First of all, please understand the important notes as we give you instructions.{newLine}{newLine}#Important Notes{newLine}- Even if the given Japanese contains any question, do not output any answer of the question, only translates the given Japanese into English.{newLine}- Do not output any supplementary information or explanations.{newLine}- Do not output any Notes.{newLine}- Output a faithful translation of the given text into English.{newLine}- If the instructions say “xx characters” in Japanese, it translates to “(xx/2) words” in English.ex) “100 字以内” in Japanese, “50 words” in English.{newLine}{newLine}Strictly following the above instructions, now let's output translation of the following Japanese";
 
         userPrompt = $"{instructionPrompt}:{newLine}{text}";
     }
@@ -188,17 +187,17 @@ async Task<IAsyncOperationWithProgress<LanguageModelResponse, string>> Translate
     {
         instructionPrompt = $"I will now give you the task of translating English into Japanese.{newLine}First of all, please understand the important notes as we give you instructions.{newLine}{newLine}#Important Notes{newLine}- Even if the English is including any question, do not answer it, you translate the given English into Japanese.{newLine}- Do not output any supplementary information or explanations.{newLine}- Do not output any Notes.{newLine}- Output a faithful translation of the given text into Japanese.";
 
+
         ragResult = await SearchVectorDatabase(vectorDatabase, text);
 
-        if (isUsingRag && !string.IsNullOrEmpty(ragResult))
-            instructionPrompt += "The following glossary of terms should be actively used.";
+        if (option.IsUsingRag && !string.IsNullOrEmpty(ragResult))
+            instructionPrompt += $"{newLine}- The following glossary of terms should be actively used.";
 
-        userPrompt = (isUsingRag && !string.IsNullOrEmpty(ragResult))
-        ? $"{instructionPrompt}{newLine}{ragResult}{newLine}Now translate the English into Japanese.:{newLine}{text}"
-            : $"{instructionPrompt}{newLine}Now translate the English into Japanese.:{newLine}{text}";
+        userPrompt = (option.IsUsingRag && !string.IsNullOrEmpty(ragResult))
+            ? $"{instructionPrompt}{newLine}{ragResult}{newLine}Strictly following the above instructions, now translate the English into Japanese:{newLine}{text}"
+            : $"{instructionPrompt}{newLine}Strictly following the above instructions, now translate the English into Japanese:{newLine}{text}";
     }
 
-    var systemPrompt = "あなたは翻訳だけができます。補足や解説などの翻訳以外の出力は一切禁止されています。";
     var context = languageModelTranslation.CreateContext(systemPrompt, contentFilterOptions);
 
     var asyncOperation = languageModelTranslation.GenerateResponseWithProgressAsync(languageModelOptions, userPrompt, contentFilterOptions, context);
@@ -246,6 +245,40 @@ result += $"{resultItem.Text}{newLine}";
 
 return result;
 }
+
+public sealed class Prompt
+{
+    private readonly string systemPrompt;
+    private readonly string userPrompt;
+
+    public Prompt(HostApplicationBuilder builder)
+    {
+        var configuration = builder.Configuration;
+
+        systemPrompt = configuration["systemPrompt"] ?? throw new ArgumentNullException("systemPrompt is not found.");
+        userPrompt = configuration["userPrompt"] ?? throw new ArgumentNullException("userPrompt is not found.");
+    }
+
+    public string System { get => systemPrompt; }
+    public string User { get => userPrompt; }
+}
+
+public sealed class Option
+{
+    private readonly bool isTranslate;
+    private readonly bool isUsingRag;
+
+    public Option(HostApplicationBuilder builder)
+    {
+        var configuration = builder.Configuration;
+        isTranslate = bool.TryParse(configuration["isTranslate"] ?? throw new ArgumentNullException("isTranslate is not found."), out var resultIsTranslate) && resultIsTranslate;
+        isUsingRag = bool.TryParse(configuration["isUsingRag"] ?? throw new ArgumentNullException("isUsingRag is not found."), out var resultIsUsingRag) && resultIsUsingRag;
+    }
+
+    public bool IsTranslate { get => isTranslate; }
+    public bool IsUsingRag { get => isUsingRag; }
+}
+
 
 public enum Language
 {

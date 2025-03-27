@@ -28,6 +28,9 @@
     <None Update="additional-docs\ff7.md">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+    <None Update="additional-docs\titanic.md">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
     <None Update="appsettings.debug.json">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
