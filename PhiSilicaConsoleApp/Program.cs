@@ -1,10 +1,11 @@
 ﻿using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Configuration;
-using Microsoft.Windows.AI.ContentModeration;
 using Microsoft.Windows.AI.Generative;
+using Microsoft.Windows.AI.ContentModeration;
 using Windows.Foundation;
 using Build5Nines.SharpVector;
 using Build5Nines.SharpVector.Data;
+using Microsoft.Windows.AI;
 
 var newLine = Environment.NewLine;
 
@@ -22,10 +23,12 @@ string additionalDocumentsPath = configuration["additionalDocumentsPath"] ?? thr
 var prompt = new Prompt(builder);
 var option = new Option(builder);
 
-if (!LanguageModel.IsAvailable())
-{
-    var op = await LanguageModel.MakeAvailableAsync();
-}
+//var a = LanguageModel.GetReadyState();
+
+//if (LanguageModel.GetReadyState() != AIFeatureReadyState.Ready)
+//{
+    //var readyResult = await LanguageModel.EnsureReadyAsync();
+//}
 
 // RAG 用のベクトルデータベースのセットアップ
 var additionalDocumentsDirectory = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, additionalDocumentsPath);
@@ -40,34 +43,34 @@ Console.WriteLine($"RAG を使う：{newLine}{option.IsUsingRag}");
 
 var languageModelOptionsTranslation = new LanguageModelOptions
 {
-    Temp = 0.9f,
-    Top_p = 0.9f,
-    Top_k = 40
+    Temperature = 0.9f,
+    TopP = 0.9f,
+    TopK = 40
 };
 
 var languageModelOptionsQuestion = new LanguageModelOptions
 {
-    Temp = 1.2f,
-    Top_p = 1.2f,
-    Top_k = 40
+    Temperature = 0.9f,
+    TopP = 0.9f,
+    TopK = 40
 };
 
 // https://learn.microsoft.com/ja-jp/windows/ai/apis/content-moderation
 var contentFilterOptions = new ContentFilterOptions
 {
-    PromptMinSeverityLevelToBlock = new TextContentFilterSeverity
+    PromptMaxAllowedSeverityLevel = new TextContentFilterSeverity
     {
-        HateContentSeverity = SeverityLevel.Medium,
-        SexualContentSeverity = SeverityLevel.Medium,
-        ViolentContentSeverity = SeverityLevel.Medium,
-        SelfHarmContentSeverity = SeverityLevel.Medium
+        Hate = SeverityLevel.Medium,
+        Sexual = SeverityLevel.Medium,
+        Violent = SeverityLevel.Medium,
+        SelfHarm = SeverityLevel.Medium
     },
-    ResponseMinSeverityLevelToBlock = new TextContentFilterSeverity
+    ResponseMaxAllowedSeverityLevel = new TextContentFilterSeverity
     {
-        HateContentSeverity = SeverityLevel.Medium,
-        SexualContentSeverity = SeverityLevel.Medium,
-        ViolentContentSeverity = SeverityLevel.Medium,
-        SelfHarmContentSeverity = SeverityLevel.Medium
+        Hate = SeverityLevel.Medium,
+        Sexual = SeverityLevel.Medium,
+        Violent = SeverityLevel.Medium,
+        SelfHarm = SeverityLevel.Medium
     }
 };
 
@@ -132,12 +135,13 @@ Console.WriteLine();
 Console.WriteLine("Response :");
 
 // 問い合わせ用セッションのセットアップ
-using LanguageModel languageModelQuention = await LanguageModel.CreateAsync();
+using LanguageModel languageModelQuestion = await LanguageModel.CreateAsync();
 
 var response = string.Empty;
 
-var context = languageModelQuention.CreateContext(translatedSystemPrompt, contentFilterOptions);
-var asyncOp = languageModelQuention.GenerateResponseWithProgressAsync(languageModelOptionsQuestion, translatedUserPrompt, contentFilterOptions, context);
+var context = languageModelQuestion.CreateContext(translatedSystemPrompt, contentFilterOptions);
+var asyncOp = languageModelQuestion.GenerateResponseAsync(context, translatedUserPrompt, languageModelOptionsQuestion);
+
 asyncOp.Progress = (asyncInfo, part) =>
 {
     Console.Write(part);
@@ -169,7 +173,7 @@ else
 Console.WriteLine($"----------------------------------------{newLine}");
 
 // 与えられたテキストを指定された言語に翻訳する
-async Task<IAsyncOperationWithProgress<LanguageModelResponse, string>> Translate(string text, Language sourceLanguage, Language targetLanguage, LanguageModelOptions languageModelOptions, ContentFilterOptions contentFilterOptions)
+async Task<IAsyncOperationWithProgress<LanguageModelResponseResult, string>> Translate(string text, Language sourceLanguage, Language targetLanguage, LanguageModelOptions languageModelOptions, ContentFilterOptions contentFilterOptions)
 {
     var systemPrompt = "You are a translator who follows instructions to the letter. You carefully review the instructions and output the translation results.";
     var instructionPrompt = string.Empty;
@@ -200,7 +204,7 @@ async Task<IAsyncOperationWithProgress<LanguageModelResponse, string>> Translate
 
     var context = languageModelTranslation.CreateContext(systemPrompt, contentFilterOptions);
 
-    var asyncOperation = languageModelTranslation.GenerateResponseWithProgressAsync(languageModelOptions, userPrompt, contentFilterOptions, context);
+    var asyncOperation = languageModelTranslation.GenerateResponseAsync(context, userPrompt, languageModelOptions);
     return asyncOperation;
 }
 
