@@ -1,11 +1,11 @@
-﻿using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Windows.AI.Generative;
-using Microsoft.Windows.AI.ContentModeration;
-using Windows.Foundation;
-using Build5Nines.SharpVector;
+﻿using Build5Nines.SharpVector;
 using Build5Nines.SharpVector.Data;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Windows.AI;
+using Microsoft.Windows.AI.ContentSafety;
+using Microsoft.Windows.AI.Text;
+using Windows.Foundation;
 
 var newLine = Environment.NewLine;
 
@@ -23,12 +23,14 @@ string additionalDocumentsPath = configuration["additionalDocumentsPath"] ?? thr
 var prompt = new Prompt(builder);
 var option = new Option(builder);
 
-//var a = LanguageModel.GetReadyState();
-
-//if (LanguageModel.GetReadyState() != AIFeatureReadyState.Ready)
-//{
-    //var readyResult = await LanguageModel.EnsureReadyAsync();
-//}
+var readyState = LanguageModel.GetReadyState();
+if (readyState is AIFeatureReadyState.Ready or AIFeatureReadyState.NotReady)
+{
+    if (readyState == AIFeatureReadyState.NotReady)
+    {
+        var op = await LanguageModel.EnsureReadyAsync();
+    }
+}
 
 // RAG 用のベクトルデータベースのセットアップ
 var additionalDocumentsDirectory = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, additionalDocumentsPath);
@@ -282,7 +284,6 @@ public sealed class Option
     public bool IsTranslate { get => isTranslate; }
     public bool IsUsingRag { get => isUsingRag; }
 }
-
 
 public enum Language
 {
