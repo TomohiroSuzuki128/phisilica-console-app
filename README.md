@@ -5,7 +5,7 @@ Phi Silica の Language Model を手軽に検証できるコンソールアプ�
 　　
 ## 必要環境
 - Copilot+ PC (Snapdragon X)
-- Windows App SDK (1.7.0-experimental3)
+- Windows App SDK (1.8.0-experimental4)
 - RAM 16GB 以上
 - Windows 11 Insider Preview Build 26120.3073 (開発およびベータ チャネル)
 　　
