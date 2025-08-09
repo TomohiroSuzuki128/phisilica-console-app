@@ -400,6 +400,5 @@ FodyWeavers.xsd
 *.sln.iml
 
 # My files
-PhiSilicaConsoleApp/appsettings.debug.json
-models
-/PhiSilicaConsoleApp/appsettings.debug.json
+#PhiSilicaConsoleApp/appsettings.debug.json
+#/PhiSilicaConsoleApp/appsettings.debug.json
